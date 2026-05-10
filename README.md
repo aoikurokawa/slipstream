@@ -1,5 +1,5 @@
-# Escrow
+# Slipstream
 
 ## Overview
-This is a simple single-use escrow contract.
 
+This is a simple single-use escrow contract.
