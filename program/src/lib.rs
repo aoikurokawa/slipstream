@@ -8,6 +8,33 @@ pub mod error;
 pub mod instructions;
 pub mod states;
 
+/// Native stake program: `Stake11111111111111111111111111111111111111`.
+const STAKE_PROGRAM_ID: Address = Address::new_from_array(pinocchio_pubkey::from_str(
+    "Stake11111111111111111111111111111111111111",
+));
+
+/// Size of `StakeStateV2` (4-byte enum tag + Meta(120) + Stake(72) + flags(4)).
+const STAKE_ACCOUNT_SIZE: u64 = 200;
+
+/// SPL stake-pool `WithdrawStake` instruction tag.
+const TAG_WITHDRAW_STAKE: u8 = 10;
+/// SPL stake-pool `DepositStake` instruction tag.
+const TAG_DEPOSIT_STAKE: u8 = 9;
+
+/// Stake program `Authorize` instruction tag (bincode `u32` LE).
+const STAKE_AUTHORIZE_TAG: u32 = 1;
+
+/// Seed prefix for the per-swap transient stake PDA.
+const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
+/// Seed for the program's global stake authority PDA.
+const ROUTER_AUTHORITY_SEED: &[u8] = b"router";
+
+#[repr(u32)]
+enum StakeAuthorize {
+    Staker = 0,
+    Withdrawer = 1,
+}
+
 entrypoint!(process_instruction);
 
 pinocchio_pubkey::declare_id!("SenPmWgTAKKhCxCAtKJLkV5yz7YW8VKQgUpTE5rEFYb");
