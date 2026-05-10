@@ -1,15 +1,39 @@
 use pinocchio::{entrypoint, error::ProgramError, AccountView, Address, ProgramResult};
 
 use crate::instructions::{
-    claim_reward::process_claim_reward, enter_pool::process_enter_pool,
-    initialize_config::process_initialize_config, initialize_pool::process_initialize_pool,
-    lock_pool::process_lock_pool, settle_pool::process_settle_pool,
-    submit_scores::process_submit_scores, SenshiInstruction,
+    initialize_config::process_initialize_config, swap::process_swap, SlipstreamInstruction,
 };
 
 pub mod error;
 pub mod instructions;
 pub mod states;
+
+/// Native stake program: `Stake11111111111111111111111111111111111111`.
+const STAKE_PROGRAM_ID: Address = Address::new_from_array(pinocchio_pubkey::from_str(
+    "Stake11111111111111111111111111111111111111",
+));
+
+/// Size of `StakeStateV2` (4-byte enum tag + Meta(120) + Stake(72) + flags(4)).
+const STAKE_ACCOUNT_SIZE: u64 = 200;
+
+/// SPL stake-pool `WithdrawStake` instruction tag.
+const TAG_WITHDRAW_STAKE: u8 = 10;
+/// SPL stake-pool `DepositStake` instruction tag.
+const TAG_DEPOSIT_STAKE: u8 = 9;
+
+/// Stake program `Authorize` instruction tag (bincode `u32` LE).
+const STAKE_AUTHORIZE_TAG: u32 = 1;
+
+/// Seed prefix for the per-swap transient stake PDA.
+const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
+/// Seed for the program's global stake authority PDA.
+const ROUTER_AUTHORITY_SEED: &[u8] = b"router";
+
+#[repr(u32)]
+enum StakeAuthorize {
+    Staker = 0,
+    Withdrawer = 1,
+}
 
 entrypoint!(process_instruction);
 
@@ -24,40 +48,20 @@ fn process_instruction(
         return Err(ProgramError::IncorrectProgramId);
     }
 
-    let instruction = SenshiInstruction::unpack(instruction_data)?;
+    let instruction = SlipstreamInstruction::unpack(instruction_data)?;
 
     match instruction {
-        SenshiInstruction::InitializeConfig => {
+        SlipstreamInstruction::InitializeConfig => {
             pinocchio_log::log!("Instruction: InitializeConfig");
             process_initialize_config(program_id, accounts)
         }
-        SenshiInstruction::InitializePool {
-            entry_fee,
-            epoch_start,
-            epoch_end,
+        SlipstreamInstruction::Swap {
+            amount_in,
+            min_amount_out,
+            nonce,
         } => {
-            pinocchio_log::log!("Instruction: InitializePool");
-            process_initialize_pool(program_id, accounts, entry_fee, epoch_start, epoch_end)
-        }
-        SenshiInstruction::EnterPool { epoch_start } => {
-            pinocchio_log::log!("Instruction: EnterPool");
-            process_enter_pool(program_id, accounts, epoch_start)
-        }
-        SenshiInstruction::LockPool { epoch_start } => {
-            pinocchio_log::log!("Instruction: LockPool");
-            process_lock_pool(program_id, accounts, epoch_start)
-        }
-        SenshiInstruction::SubmitScores { epoch_start, score } => {
-            pinocchio_log::log!("Instruction: SubmitScores");
-            process_submit_scores(program_id, accounts, epoch_start, score)
-        }
-        SenshiInstruction::SettlePool { epoch_start } => {
-            pinocchio_log::log!("Instruction: SettlePool");
-            process_settle_pool(program_id, accounts, epoch_start)
-        }
-        SenshiInstruction::ClaimReward { epoch_start } => {
-            pinocchio_log::log!("Instruction: ClaimReward");
-            process_claim_reward(program_id, accounts, epoch_start)
+            pinocchio_log::log!("Instruction: Swap");
+            process_swap(program_id, accounts, amount_in, min_amount_out, nonce)
         }
     }
 }

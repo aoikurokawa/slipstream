@@ -2,7 +2,7 @@ use pinocchio::error::ProgramError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum SenshiError {
+pub enum SlipstreamError {
     #[error("Encountered an arithmetic under/overflow error.")]
     ArithmeticError,
 
@@ -26,10 +26,13 @@ pub enum SenshiError {
 
     #[error("No reward assigned to this entry.")]
     NoReward,
+
+    #[error("Output amount is below the requested minimum.")]
+    SlippageExceeded,
 }
 
-impl From<SenshiError> for ProgramError {
-    fn from(value: SenshiError) -> Self {
+impl From<SlipstreamError> for ProgramError {
+    fn from(value: SlipstreamError) -> Self {
         Self::Custom(value as u32)
     }
 }

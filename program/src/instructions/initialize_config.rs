@@ -6,7 +6,7 @@ use pinocchio::{
 };
 use pinocchio_system::instructions::CreateAccount;
 
-use crate::{error::SenshiError, states::config::Config};
+use crate::{error::SlipstreamError, states::config::Config};
 
 pub fn process_initialize_config(
     program_id: &Address,
@@ -29,7 +29,7 @@ pub fn process_initialize_config(
     let rent = Rent::get()?;
     let space = 8usize
         .checked_add(Config::LEN)
-        .ok_or(SenshiError::ArithmeticError)?;
+        .ok_or(SlipstreamError::ArithmeticError)?;
 
     let (config_pubkey, config_bump, mut config_seeds) = Config::find_program_address(program_id);
     config_seeds.push(vec![config_bump]);
