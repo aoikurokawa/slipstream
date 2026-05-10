@@ -303,20 +303,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
-name = "senshi-program"
-version = "0.0.1"
-dependencies = [
- "pinocchio 0.10.2",
- "pinocchio-associated-token-account",
- "pinocchio-log",
- "pinocchio-pubkey",
- "pinocchio-system",
- "pinocchio-token",
- "solana-address",
- "thiserror",
-]
-
-[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -332,6 +318,20 @@ name = "sha2-const-stable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f179d4e11094a893b82fff208f74d448a7512f99f5a0acbd5c679b705f83ed9"
+
+[[package]]
+name = "slipstream-program"
+version = "0.0.1"
+dependencies = [
+ "pinocchio 0.10.2",
+ "pinocchio-associated-token-account",
+ "pinocchio-log",
+ "pinocchio-pubkey",
+ "pinocchio-system",
+ "pinocchio-token",
+ "solana-address",
+ "thiserror",
+]
 
 [[package]]
 name = "solana-account-view"

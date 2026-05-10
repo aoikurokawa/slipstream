@@ -1,11 +1,11 @@
 [package]
-name = "senshi-program"
+name = "slipstream-program"
 version.workspace = true
 edition = "2021"
 
 [lib]
 crate-type = ["lib", "cdylib"]
-name = "senshi_program"
+name = "slipstream_program"
 
 [dependencies]
 pinocchio.workspace = true

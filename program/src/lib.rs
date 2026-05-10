@@ -37,7 +37,7 @@ enum StakeAuthorize {
 
 entrypoint!(process_instruction);
 
-pinocchio_pubkey::declare_id!("SenPmWgTAKKhCxCAtKJLkV5yz7YW8VKQgUpTE5rEFYb");
+pinocchio_pubkey::declare_id!("SL1p2N8iNBBo3uaUF92SGo8VfCkN6Xqdmq7tUTqz6cd");
 
 fn process_instruction(
     program_id: &Address,
