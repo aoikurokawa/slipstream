@@ -1,6 +1,6 @@
 use pinocchio::{error::ProgramError, Address};
 
-use crate::error::SenshiError;
+use crate::error::SlipstreamError;
 
 #[derive(Debug)]
 pub struct Config {
@@ -28,7 +28,7 @@ impl Config {
         if bytes.len()
             != Self::LEN
                 .checked_sub(8)
-                .ok_or(SenshiError::ArithmeticError)?
+                .ok_or(SlipstreamError::ArithmeticError)?
         {
             return Err(ProgramError::InvalidAccountData);
         }
@@ -48,7 +48,7 @@ impl Config {
         if bytes.len()
             != Self::LEN
                 .checked_sub(8)
-                .ok_or(SenshiError::ArithmeticError)?
+                .ok_or(SlipstreamError::ArithmeticError)?
         {
             return Err(ProgramError::InvalidAccountData);
         }
