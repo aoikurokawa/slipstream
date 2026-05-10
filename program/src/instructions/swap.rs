@@ -25,8 +25,7 @@ use crate::{
 ///  1. `[writable]`          User's LST_A token account.
 ///  2. `[writable]`          User's LST_B token account.
 ///  3. `[writable]`          Transient stake PDA (will be created).
-///  4. `[]`                  Router authority PDA (becomes transient stake's
-///                           staker/withdrawer post-`WithdrawStake`).
+///  4. `[]`                  Router authority PDA (becomes transient stake's staker/withdrawer post-`WithdrawStake`).
 ///  5. `[]`                  Pool A's stake-pool program.
 ///  6. `[writable]`          Pool A state account.
 ///  7. `[writable]`          Pool A validator list.
@@ -37,11 +36,9 @@ use crate::{
 /// 12. `[]`                  Pool B's stake-pool program.
 /// 13. `[writable]`          Pool B state account.
 /// 14. `[writable]`          Pool B validator list.
-/// 15. `[]`                  Pool B deposit authority. Marked as signer iff
-///                           the pool uses a custom (non-PDA) deposit auth.
+/// 15. `[]`                  Pool B deposit authority. Marked as signer iff the pool uses a custom (non-PDA) deposit auth.
 /// 16. `[]`                  Pool B withdraw authority (PDA of pool B program).
-/// 17. `[writable]`          Pool B validator stake account for the same
-///                           validator that backed the source split.
+/// 17. `[writable]`          Pool B validator stake account for the same validator that backed the source split.
 /// 18. `[writable]`          Pool B reserve stake account.
 /// 19. `[writable]`          Pool B manager fee token account.
 /// 20. `[writable]`          Pool B referral fee token account.
