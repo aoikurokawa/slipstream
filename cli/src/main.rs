@@ -87,11 +87,6 @@ enum Command {
         #[arg(long)]
         vault: Option<String>,
 
-        /// Interceptor fee wallet token account. Required when pool B's
-        /// deposit authority is owned by the interceptor program.
-        #[arg(long)]
-        fee_wallet: Option<String>,
-
         /// Print the resolved accounts and instruction without submitting.
         #[arg(long)]
         dry_run: bool,
@@ -127,8 +122,6 @@ enum Command {
         pool_b_program: Option<String>,
         #[arg(long)]
         vault: Option<String>,
-        #[arg(long)]
-        fee_wallet: Option<String>,
         #[arg(long, default_value = DEFAULT_RPC_URL)]
         rpc_url: String,
         #[arg(long)]
@@ -152,7 +145,6 @@ fn main() -> Result<()> {
             rpc_url,
             keypair,
             vault,
-            fee_wallet,
             dry_run,
         } => run_swap(SwapArgs {
             pool_a,
@@ -167,7 +159,6 @@ fn main() -> Result<()> {
             rpc_url,
             keypair,
             vault,
-            fee_wallet,
             dry_run,
         }),
         Command::Derive {
@@ -184,7 +175,6 @@ fn main() -> Result<()> {
             pool_a_program,
             pool_b_program,
             vault,
-            fee_wallet,
             rpc_url,
             out,
         } => run_derive_config(
@@ -196,7 +186,6 @@ fn main() -> Result<()> {
             pool_a_program,
             pool_b_program,
             vault,
-            fee_wallet,
             rpc_url,
             out,
         ),
@@ -216,7 +205,6 @@ struct SwapArgs {
     rpc_url: String,
     keypair: String,
     vault: Option<String>,
-    fee_wallet: Option<String>,
     dry_run: bool,
 }
 
@@ -234,7 +222,6 @@ fn run_swap(args: SwapArgs) -> Result<()> {
         pool_a_program: parse_opt_pubkey("--pool-a-program", args.pool_a_program)?,
         pool_b_program: parse_opt_pubkey("--pool-b-program", args.pool_b_program)?,
         vault: parse_opt_pubkey("--vault", args.vault)?,
-        fee_wallet: parse_opt_pubkey("--fee-wallet", args.fee_wallet)?,
     };
 
     let rpc = RpcClient::new_with_commitment(args.rpc_url, CommitmentConfig::confirmed());
@@ -324,7 +311,6 @@ fn run_derive_config(
     pool_a_program: Option<String>,
     pool_b_program: Option<String>,
     vault: Option<String>,
-    fee_wallet: Option<String>,
     rpc_url: String,
     out: Option<PathBuf>,
 ) -> Result<()> {
@@ -337,7 +323,6 @@ fn run_derive_config(
         pool_a_program: parse_opt_pubkey("--pool-a-program", pool_a_program)?,
         pool_b_program: parse_opt_pubkey("--pool-b-program", pool_b_program)?,
         vault: parse_opt_pubkey("--vault", vault)?,
-        fee_wallet: parse_opt_pubkey("--fee-wallet", fee_wallet)?,
     };
 
     let rpc = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());

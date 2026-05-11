@@ -84,13 +84,14 @@ pub struct PoolB {
 }
 
 /// Extra accounts needed when pool B's deposit auth is owned by the
-/// interceptor program. Populated by the caller (the CLI takes them as
-/// `--vault`/`--fee-wallet` flags); see notes in [`derive_swap_config`].
+/// interceptor program. The CLI takes `vault` as a `--vault` flag because
+/// we don't yet parse the interceptor's state-account layout. The keeper
+/// handles `ClaimPoolTokens` ~10 min later, so `fee_wallet` and the user's
+/// LST_B ATA are not part of this transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InterceptorExtras {
     pub program: String,
     pub vault: String,
-    pub fee_wallet: String,
 }
 
 /// Full per-swap configuration. `interceptor` is `Some` iff pool B's
@@ -282,7 +283,6 @@ pub struct InterceptorSwapAccounts {
     pub deposit_receipt: Pubkey,
     pub base: Pubkey,
     pub vault: Pubkey,
-    pub fee_wallet: Pubkey,
 }
 
 impl InterceptorSwapAccounts {
@@ -293,13 +293,11 @@ impl InterceptorSwapAccounts {
         let extras = cfg.interceptor.as_ref().ok_or_else(|| {
             anyhow!(
                 "config has no `interceptor` field — pool B's deposit authority \
-                 is owned by the interceptor program, so --vault and --fee-wallet \
-                 are required"
+                 is owned by the interceptor program, so --vault is required"
             )
         })?;
         let interceptor_program = parse_pubkey("interceptor.program", &extras.program)?;
         let vault = parse_pubkey("interceptor.vault", &extras.vault)?;
-        let fee_wallet = parse_pubkey("interceptor.fee_wallet", &extras.fee_wallet)?;
         let (deposit_receipt, _) =
             derive_deposit_receipt(&interceptor_program, &base_accounts.pool_b, &base);
 
@@ -309,12 +307,13 @@ impl InterceptorSwapAccounts {
             deposit_receipt,
             base,
             vault,
-            fee_wallet,
         })
     }
 }
 
-/// Build the `SwapViaInterceptor` instruction (32 accounts).
+/// Build the `SwapViaInterceptor` instruction (30 accounts). The user's
+/// `LST_B` ATA is intentionally absent — the keeper supplies it later when
+/// it claims the receipt.
 pub fn build_swap_via_interceptor_ix(
     accounts: &InterceptorSwapAccounts,
     amount_in: u64,
@@ -331,7 +330,6 @@ pub fn build_swap_via_interceptor_ix(
     let metas = vec![
         AccountMeta::new(b.user, true),
         AccountMeta::new(b.user_lst_a, false),
-        AccountMeta::new(b.user_lst_b, false),
         AccountMeta::new(b.transient_stake, false),
         AccountMeta::new_readonly(b.router_authority, false),
         AccountMeta::new_readonly(b.pool_a_program, false),
@@ -360,9 +358,8 @@ pub fn build_swap_via_interceptor_ix(
         AccountMeta::new(accounts.deposit_receipt, false),
         AccountMeta::new_readonly(accounts.base, true),
         AccountMeta::new(accounts.vault, false),
-        AccountMeta::new(accounts.fee_wallet, false),
     ];
-    debug_assert_eq!(metas.len(), 32);
+    debug_assert_eq!(metas.len(), 30);
 
     Instruction {
         program_id: b.program_id,
@@ -465,8 +462,6 @@ pub struct DeriveInputs {
     pub pool_b_program: Option<Pubkey>,
     /// Interceptor vault token account. Required iff interceptor mode.
     pub vault: Option<Pubkey>,
-    /// Interceptor fee wallet token account. Required iff interceptor mode.
-    pub fee_wallet: Option<Pubkey>,
 }
 
 /// Which deposit path a swap must take, based on who owns pool B's
@@ -551,17 +546,9 @@ pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<Swap
                     pool_b_state.stake_deposit_authority
                 )
             })?;
-            let fee_wallet = inputs.fee_wallet.ok_or_else(|| {
-                anyhow!(
-                    "pool B's deposit auth ({}) is owned by the interceptor program — \
-                     pass --fee-wallet <token account>",
-                    pool_b_state.stake_deposit_authority
-                )
-            })?;
             Some(InterceptorExtras {
                 program: INTERCEPTOR_PROGRAM_ID.to_string(),
                 vault: vault.to_string(),
-                fee_wallet: fee_wallet.to_string(),
             })
         }
     };

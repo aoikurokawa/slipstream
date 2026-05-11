@@ -32,11 +32,6 @@ const INTERCEPTOR_PROGRAM_ID: Address = Address::new_from_array(pinocchio_pubkey
     "5TAiuAh3YGDbwjEruC1ZpXTJWdNDS7Ur7VeqNNiHMmGV",
 ));
 
-/// Interceptor `DepositStake` instruction tag (borsh u8 enum discriminant).
-const TAG_INTERCEPTOR_DEPOSIT_STAKE: u8 = 2;
-/// Interceptor `ClaimPoolTokens` instruction tag.
-const TAG_INTERCEPTOR_CLAIM_POOL_TOKENS: u8 = 5;
-
 /// Seed prefix for the per-swap transient stake PDA.
 const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
 /// Seed for the program's global stake authority PDA.
