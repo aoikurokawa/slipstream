@@ -1,0 +1,104 @@
+{
+  "version": "0.0.1",
+  "name": "slipstream",
+  "instructions": [
+    {
+      "name": "InitializeConfig",
+      "accounts": [],
+      "args": [],
+      "discriminant": {
+        "type": "u8",
+        "value": 0
+      }
+    },
+    {
+      "name": "Swap",
+      "accounts": [],
+      "args": [
+        {
+          "name": "amountIn",
+          "type": "u64"
+        },
+        {
+          "name": "minAmountOut",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ],
+      "discriminant": {
+        "type": "u8",
+        "value": 1
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": {
+              "defined": "Address"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 0,
+      "name": "ArithmeticError",
+      "msg": "Encountered an arithmetic under/overflow error."
+    },
+    {
+      "code": 1,
+      "name": "PoolNotOpen",
+      "msg": "Pool is not open for entries."
+    },
+    {
+      "code": 2,
+      "name": "InvalidTransition",
+      "msg": "Invalid pool status transition."
+    },
+    {
+      "code": 3,
+      "name": "EpochNotReached",
+      "msg": "Target epoch has not been reached yet."
+    },
+    {
+      "code": 4,
+      "name": "EpochNotEnded",
+      "msg": "Pool epoch has not ended yet."
+    },
+    {
+      "code": 5,
+      "name": "NotSettled",
+      "msg": "Pool is not settled."
+    },
+    {
+      "code": 6,
+      "name": "AlreadyClaimed",
+      "msg": "Reward has already been claimed."
+    },
+    {
+      "code": 7,
+      "name": "NoReward",
+      "msg": "No reward assigned to this entry."
+    },
+    {
+      "code": 8,
+      "name": "SlippageExceeded",
+      "msg": "Output amount is below the requested minimum."
+    }
+  ],
+  "metadata": {
+    "origin": "shank",
+    "address": "SL1p2N8iNBBo3uaUF92SGo8VfCkN6Xqdmq7tUTqz6cd"
+  }
+}
