@@ -27,8 +27,7 @@ pub const STAKE_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("Stake11111111111111111111111111111111111111");
 
 /// System program.
-pub const SYSTEM_PROGRAM_ID: Pubkey =
-    solana_sdk::pubkey!("11111111111111111111111111111111");
+pub const SYSTEM_PROGRAM_ID: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
 /// Clock sysvar.
 pub const CLOCK_SYSVAR_ID: Pubkey =
@@ -337,12 +336,8 @@ pub struct DeriveInputs {
 /// Fetch both pool states from RPC and assemble a [`SwapConfig`]. The user's
 /// LST_A / LST_B token accounts are derived as ATAs of the pools' mints.
 pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<SwapConfig> {
-    let pool_a_program = inputs
-        .pool_a_program
-        .unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
-    let pool_b_program = inputs
-        .pool_b_program
-        .unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
+    let pool_a_program = inputs.pool_a_program.unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
+    let pool_b_program = inputs.pool_b_program.unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
 
     let pool_a_acct = rpc
         .get_account(&inputs.pool_a)
