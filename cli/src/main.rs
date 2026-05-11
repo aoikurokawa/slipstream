@@ -9,11 +9,18 @@ use slipstream_cli::{
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
+    compute_budget::ComputeBudgetInstruction,
     pubkey::Pubkey,
     signature::Keypair,
     signer::{keypair::read_keypair_file, Signer},
     transaction::Transaction,
 };
+
+/// CU limit we prepend to swap transactions. The interceptor route goes
+/// 4-deep with a chain of stake-program CPIs and reliably overflows the
+/// 200k default; 400k leaves comfortable headroom. The vanilla route fits
+/// in 200k but pays a tiny cost for being uniform here.
+const SWAP_CU_LIMIT: u32 = 400_000;
 
 const DEFAULT_PROGRAM_ID: &str = "SL1p2N8iNBBo3uaUF92SGo8VfCkN6Xqdmq7tUTqz6cd";
 const DEFAULT_RPC_URL: &str = "http://127.0.0.1:8899";
@@ -264,10 +271,12 @@ fn run_swap(args: SwapArgs) -> Result<()> {
     let blockhash = rpc
         .get_latest_blockhash()
         .context("fetch latest blockhash")?;
+    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(SWAP_CU_LIMIT);
+    let ixs = [cu_ix, ix];
     let tx = if let Some(base) = base_keypair.as_ref() {
-        Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer, base], blockhash)
+        Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &[&payer, base], blockhash)
     } else {
-        Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)
+        Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &[&payer], blockhash)
     };
     let sig = rpc
         .send_and_confirm_transaction(&tx)
