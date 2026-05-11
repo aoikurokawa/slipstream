@@ -1,0 +1,26 @@
+{
+  "program_id": "SL1p2N8iNBBo3uaUF92SGo8VfCkN6Xqdmq7tUTqz6cd",
+  "user_lst_a": "unsTAkQsjZHKeQhFUn8pq7RiXZ6RsiwiK2LwCAibxev",
+  "user_lst_b": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+  "pool_a": {
+    "program": "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+    "address": "uNstksMm9v49sdoyJ8cstYbBJHU2CmQ9pq8AfchUxhY",
+    "validator_list": "BMchBp9y7rqVToJ91Sq3ZqXNVZsgVYtffR3f1uiuNN7C",
+    "withdraw_authority": "A6WM1KgWQ3dBUXdQq8HSR17LE5azSPDRjzSGLZZmtvjF",
+    "validator_stake": "2xpTBBscqx3B9Q81ZLU9ZBEdZG2uJjBf83eocXZxkqWC",
+    "manager_fee": "Dm4ccnd9aqmf9cibL5XqU2syfBnwv62bE7HMauJxeTt6",
+    "mint": "unsTAkQsjZHKeQhFUn8pq7RiXZ6RsiwiK2LwCAibxev"
+  },
+  "pool_b": {
+    "program": "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy",
+    "address": "Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb",
+    "validator_list": "G5N6K3qW86GSkNEpywcbJk42LjEZoshzECFg1LNVjSLa",
+    "deposit_authority": "74opVa3v51hUmTrsZn8YusZw4fXB16vGQY4WYHt9UegR",
+    "withdraw_authority": "6iQKfEyhr3bZMotVkW6beNZz5CPAkiwvgV2CTje9pVSS",
+    "validator_stake": "GyferJopdFaGcPTbpPWMCscwD6VsejM1peabAcN7tmTF",
+    "reserve_stake": "CzKqc9cs4XpyG6y4peQgk3vBjPyqhktmfqaMuMBCXCqm",
+    "manager_fee": "FJJycCDD55ZJ79nrYnhR8S89bbNdawUAoCzhUQZoApVk",
+    "referral_fee": "FJJycCDD55ZJ79nrYnhR8S89bbNdawUAoCzhUQZoApVk",
+    "mint": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+  }
+}
