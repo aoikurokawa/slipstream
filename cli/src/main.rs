@@ -241,7 +241,10 @@ fn run_swap(args: SwapArgs) -> Result<()> {
             args.nonce,
         );
         println!("(interceptor mode — pool B requires the interceptor deposit flow)");
-        println!("deposit_receipt:   {}", interceptor_accounts.deposit_receipt);
+        println!(
+            "deposit_receipt:   {}",
+            interceptor_accounts.deposit_receipt
+        );
         println!("base:              {}", base.pubkey());
         (ix, Some(base))
     } else {
@@ -262,12 +265,7 @@ fn run_swap(args: SwapArgs) -> Result<()> {
         .get_latest_blockhash()
         .context("fetch latest blockhash")?;
     let tx = if let Some(base) = base_keypair.as_ref() {
-        Transaction::new_signed_with_payer(
-            &[ix],
-            Some(&payer.pubkey()),
-            &[&payer, base],
-            blockhash,
-        )
+        Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer, base], blockhash)
     } else {
         Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)
     };
