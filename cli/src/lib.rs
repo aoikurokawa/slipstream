@@ -1,13 +1,14 @@
-//! Slipstream CLI library — builds the on-chain `Swap` instruction.
+//! Slipstream CLI library — builds the on-chain `Swap` instruction and
+//! materializes its 27-account payload from on-chain stake-pool state.
 //!
 //! Mirrors the account ordering documented in
-//! `program/src/instructions/swap.rs`. The companion binary loads pool
-//! addresses from a JSON config, signs the transaction, and submits it.
+//! `program/src/instructions/swap.rs`.
 
 use std::str::FromStr;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -16,6 +17,10 @@ use solana_sdk::{
 /// SPL Token program (classic, not Token-2022).
 pub const TOKEN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+/// SPL Associated Token Account program.
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /// Native stake program.
 pub const STAKE_PROGRAM_ID: Pubkey =
@@ -32,6 +37,11 @@ pub const CLOCK_SYSVAR_ID: Pubkey =
 /// Stake history sysvar.
 pub const STAKE_HISTORY_SYSVAR_ID: Pubkey =
     solana_sdk::pubkey!("SysvarStakeHistory1111111111111111111111111");
+
+/// Canonical SPL stake-pool program. Used by JitoSOL, bSOL, Sanctum LSTs, etc.
+/// Marinade has its own program and is NOT compatible without overrides.
+pub const SPL_STAKE_POOL_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy");
 
 const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
 const ROUTER_AUTHORITY_SEED: &[u8] = b"router";
@@ -233,4 +243,168 @@ pub fn derive_router_authority(program_id: &Pubkey) -> (Pubkey, u8) {
 
 fn parse_pubkey(field: &str, s: &str) -> Result<Pubkey> {
     Pubkey::from_str(s).with_context(|| format!("invalid pubkey in `{field}`: {s}"))
+}
+
+// ============================================================================
+// Stake pool state parsing + derive-config
+// ============================================================================
+
+/// Subset of `spl_stake_pool::state::StakePool` we need. Layout is borsh-
+/// sequential, so we parse by byte offset rather than pulling in
+/// `spl-stake-pool` as a heavy dependency.
+#[derive(Debug, Clone)]
+pub struct StakePoolState {
+    pub stake_deposit_authority: Pubkey,
+    pub stake_withdraw_bump_seed: u8,
+    pub validator_list: Pubkey,
+    pub reserve_stake: Pubkey,
+    pub pool_mint: Pubkey,
+    pub manager_fee_account: Pubkey,
+}
+
+impl StakePoolState {
+    /// Parse the first 258 bytes of a stake-pool account. Returns an error if
+    /// the buffer is too short or the account-type tag isn't `StakePool` (=1).
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        if data.len() < 258 {
+            return Err(anyhow!(
+                "stake pool account is too small ({} bytes, need ≥ 258)",
+                data.len()
+            ));
+        }
+        // account_type: 0 = Uninitialized, 1 = StakePool, 2 = ValidatorList.
+        if data[0] != 1 {
+            return Err(anyhow!(
+                "account_type is {} (expected 1 = StakePool)",
+                data[0]
+            ));
+        }
+
+        Ok(Self {
+            stake_deposit_authority: read_pubkey(data, 65),
+            stake_withdraw_bump_seed: data[97],
+            validator_list: read_pubkey(data, 98),
+            reserve_stake: read_pubkey(data, 130),
+            pool_mint: read_pubkey(data, 162),
+            manager_fee_account: read_pubkey(data, 194),
+        })
+    }
+}
+
+fn read_pubkey(data: &[u8], offset: usize) -> Pubkey {
+    let mut buf = [0u8; 32];
+    buf.copy_from_slice(&data[offset..offset + 32]);
+    Pubkey::new_from_array(buf)
+}
+
+/// Derive `[pool, "withdraw"]` PDA.
+pub fn derive_withdraw_authority(pool_program: &Pubkey, pool: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[pool.as_ref(), b"withdraw"], pool_program)
+}
+
+/// Derive the *primary* per-validator stake account PDA (no transient seed).
+pub fn derive_validator_stake(
+    pool_program: &Pubkey,
+    vote_account: &Pubkey,
+    pool: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[vote_account.as_ref(), pool.as_ref(), &[]], pool_program)
+}
+
+/// Derive the associated token account for `(owner, mint)`.
+pub fn derive_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[owner.as_ref(), TOKEN_PROGRAM_ID.as_ref(), mint.as_ref()],
+        &ASSOCIATED_TOKEN_PROGRAM_ID,
+    )
+    .0
+}
+
+/// Inputs to the config-derivation flow. Anything optional falls back to a
+/// sensible default (canonical SPL stake-pool program, `referral_fee` =
+/// `manager_fee_account`).
+#[derive(Debug, Clone)]
+pub struct DeriveInputs {
+    pub slipstream_program_id: Pubkey,
+    pub pool_a: Pubkey,
+    pub pool_b: Pubkey,
+    pub validator_vote: Pubkey,
+    pub user: Pubkey,
+    pub pool_a_program: Option<Pubkey>,
+    pub pool_b_program: Option<Pubkey>,
+}
+
+/// Fetch both pool states from RPC and assemble a [`SwapConfig`]. The user's
+/// LST_A / LST_B token accounts are derived as ATAs of the pools' mints.
+pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<SwapConfig> {
+    let pool_a_program = inputs
+        .pool_a_program
+        .unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
+    let pool_b_program = inputs
+        .pool_b_program
+        .unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
+
+    let pool_a_acct = rpc
+        .get_account(&inputs.pool_a)
+        .with_context(|| format!("fetch pool A {}", inputs.pool_a))?;
+    let pool_b_acct = rpc
+        .get_account(&inputs.pool_b)
+        .with_context(|| format!("fetch pool B {}", inputs.pool_b))?;
+
+    if pool_a_acct.owner != pool_a_program {
+        return Err(anyhow!(
+            "pool A owner {} != expected program {}",
+            pool_a_acct.owner,
+            pool_a_program
+        ));
+    }
+    if pool_b_acct.owner != pool_b_program {
+        return Err(anyhow!(
+            "pool B owner {} != expected program {}",
+            pool_b_acct.owner,
+            pool_b_program
+        ));
+    }
+
+    let pool_a_state = StakePoolState::parse(&pool_a_acct.data).context("parse pool A")?;
+    let pool_b_state = StakePoolState::parse(&pool_b_acct.data).context("parse pool B")?;
+
+    let (pool_a_withdraw_authority, _) = derive_withdraw_authority(&pool_a_program, &inputs.pool_a);
+    let (pool_b_withdraw_authority, _) = derive_withdraw_authority(&pool_b_program, &inputs.pool_b);
+    let (pool_a_validator_stake, _) =
+        derive_validator_stake(&pool_a_program, &inputs.validator_vote, &inputs.pool_a);
+    let (pool_b_validator_stake, _) =
+        derive_validator_stake(&pool_b_program, &inputs.validator_vote, &inputs.pool_b);
+
+    let user_lst_a = derive_ata(&inputs.user, &pool_a_state.pool_mint);
+    let user_lst_b = derive_ata(&inputs.user, &pool_b_state.pool_mint);
+
+    Ok(SwapConfig {
+        program_id: inputs.slipstream_program_id.to_string(),
+        user_lst_a: user_lst_a.to_string(),
+        user_lst_b: user_lst_b.to_string(),
+        pool_a: PoolA {
+            program: pool_a_program.to_string(),
+            address: inputs.pool_a.to_string(),
+            validator_list: pool_a_state.validator_list.to_string(),
+            withdraw_authority: pool_a_withdraw_authority.to_string(),
+            validator_stake: pool_a_validator_stake.to_string(),
+            manager_fee: pool_a_state.manager_fee_account.to_string(),
+            mint: pool_a_state.pool_mint.to_string(),
+        },
+        pool_b: PoolB {
+            program: pool_b_program.to_string(),
+            address: inputs.pool_b.to_string(),
+            validator_list: pool_b_state.validator_list.to_string(),
+            deposit_authority: pool_b_state.stake_deposit_authority.to_string(),
+            withdraw_authority: pool_b_withdraw_authority.to_string(),
+            validator_stake: pool_b_validator_stake.to_string(),
+            reserve_stake: pool_b_state.reserve_stake.to_string(),
+            manager_fee: pool_b_state.manager_fee_account.to_string(),
+            // No referral relationship by default — point at the manager fee
+            // account, which the SPL stake pool program accepts.
+            referral_fee: pool_b_state.manager_fee_account.to_string(),
+            mint: pool_b_state.pool_mint.to_string(),
+        },
+    })
 }
