@@ -30,8 +30,14 @@ pub enum SlipstreamInstruction {
     /// but routes the deposit through `interceptor::DepositStake` +
     /// `interceptor::ClaimPoolTokens` in the same transaction.
     SwapViaInterceptor {
+        /// Amount of LST_A to burn at pool A.
         amount_in: u64,
+
+        /// Minimum LST_B to receive from pool B; reverts on slippage.
         min_amount_out: u64,
+
+        /// Nonce that distinguishes the per-swap transient stake PDA. Lets a
+        /// caller route concurrent swaps without colliding on the PDA.
         nonce: u64,
     },
 }
