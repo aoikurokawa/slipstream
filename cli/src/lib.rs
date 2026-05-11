@@ -42,11 +42,18 @@ pub const STAKE_HISTORY_SYSVAR_ID: Pubkey =
 pub const SPL_STAKE_POOL_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy");
 
+/// Jito's stake-deposit interceptor program.
+pub const INTERCEPTOR_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("5TAiuAh3YGDbwjEruC1ZpXTJWdNDS7Ur7VeqNNiHMmGV");
+
 const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
 const ROUTER_AUTHORITY_SEED: &[u8] = b"router";
+const DEPOSIT_RECEIPT_SEED: &[u8] = b"deposit_receipt";
 
 /// On-chain instruction tag for `SlipstreamInstruction::Swap`.
 const TAG_SWAP: u8 = 1;
+/// On-chain instruction tag for `SlipstreamInstruction::SwapViaInterceptor`.
+const TAG_SWAP_VIA_INTERCEPTOR: u8 = 2;
 
 /// Pool A (source) addresses needed to route a swap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,7 +83,18 @@ pub struct PoolB {
     pub mint: String,
 }
 
-/// Full per-swap configuration, loaded from a JSON file.
+/// Extra accounts needed when pool B's deposit auth is owned by the
+/// interceptor program. Populated by the caller (the CLI takes them as
+/// `--vault`/`--fee-wallet` flags); see notes in [`derive_swap_config`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptorExtras {
+    pub program: String,
+    pub vault: String,
+    pub fee_wallet: String,
+}
+
+/// Full per-swap configuration. `interceptor` is `Some` iff pool B's
+/// deposit authority is owned by the interceptor program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapConfig {
     pub program_id: String,
@@ -84,6 +102,8 @@ pub struct SwapConfig {
     pub user_lst_b: String,
     pub pool_a: PoolA,
     pub pool_b: PoolB,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub interceptor: Option<InterceptorExtras>,
 }
 
 /// Resolved pubkeys for every account the on-chain `Swap` consumes.
@@ -240,6 +260,117 @@ pub fn derive_router_authority(program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[ROUTER_AUTHORITY_SEED], program_id)
 }
 
+/// Derive the interceptor's `DepositReceipt` PDA from
+/// `["deposit_receipt", pool_b, base]`.
+pub fn derive_deposit_receipt(
+    interceptor_program: &Pubkey,
+    pool_b: &Pubkey,
+    base: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[DEPOSIT_RECEIPT_SEED, pool_b.as_ref(), base.as_ref()],
+        interceptor_program,
+    )
+}
+
+/// Resolved accounts for `SwapViaInterceptor`. Wraps the vanilla 27-account
+/// layout plus the 5 extras the interceptor flow needs.
+#[derive(Debug, Clone)]
+pub struct InterceptorSwapAccounts {
+    pub base_accounts: SwapAccounts,
+    pub interceptor_program: Pubkey,
+    pub deposit_receipt: Pubkey,
+    pub base: Pubkey,
+    pub vault: Pubkey,
+    pub fee_wallet: Pubkey,
+}
+
+impl InterceptorSwapAccounts {
+    /// Resolve from a config (which must have `interceptor` populated) plus
+    /// the runtime-generated `base` keypair pubkey.
+    pub fn from_config(cfg: &SwapConfig, user: Pubkey, nonce: u64, base: Pubkey) -> Result<Self> {
+        let base_accounts = SwapAccounts::from_config(cfg, user, nonce)?;
+        let extras = cfg.interceptor.as_ref().ok_or_else(|| {
+            anyhow!(
+                "config has no `interceptor` field — pool B's deposit authority \
+                 is owned by the interceptor program, so --vault and --fee-wallet \
+                 are required"
+            )
+        })?;
+        let interceptor_program = parse_pubkey("interceptor.program", &extras.program)?;
+        let vault = parse_pubkey("interceptor.vault", &extras.vault)?;
+        let fee_wallet = parse_pubkey("interceptor.fee_wallet", &extras.fee_wallet)?;
+        let (deposit_receipt, _) =
+            derive_deposit_receipt(&interceptor_program, &base_accounts.pool_b, &base);
+
+        Ok(Self {
+            base_accounts,
+            interceptor_program,
+            deposit_receipt,
+            base,
+            vault,
+            fee_wallet,
+        })
+    }
+}
+
+/// Build the `SwapViaInterceptor` instruction (32 accounts).
+pub fn build_swap_via_interceptor_ix(
+    accounts: &InterceptorSwapAccounts,
+    amount_in: u64,
+    min_amount_out: u64,
+    nonce: u64,
+) -> Instruction {
+    let mut data = Vec::with_capacity(25);
+    data.push(TAG_SWAP_VIA_INTERCEPTOR);
+    data.extend_from_slice(&amount_in.to_le_bytes());
+    data.extend_from_slice(&min_amount_out.to_le_bytes());
+    data.extend_from_slice(&nonce.to_le_bytes());
+
+    let b = &accounts.base_accounts;
+    let metas = vec![
+        AccountMeta::new(b.user, true),
+        AccountMeta::new(b.user_lst_a, false),
+        AccountMeta::new(b.user_lst_b, false),
+        AccountMeta::new(b.transient_stake, false),
+        AccountMeta::new_readonly(b.router_authority, false),
+        AccountMeta::new_readonly(b.pool_a_program, false),
+        AccountMeta::new(b.pool_a, false),
+        AccountMeta::new(b.pool_a_validator_list, false),
+        AccountMeta::new_readonly(b.pool_a_withdraw_authority, false),
+        AccountMeta::new(b.pool_a_validator_stake, false),
+        AccountMeta::new(b.pool_a_manager_fee, false),
+        AccountMeta::new(b.pool_a_mint, false),
+        AccountMeta::new_readonly(b.pool_b_program, false),
+        AccountMeta::new(b.pool_b, false),
+        AccountMeta::new(b.pool_b_validator_list, false),
+        AccountMeta::new_readonly(b.pool_b_deposit_authority, false),
+        AccountMeta::new_readonly(b.pool_b_withdraw_authority, false),
+        AccountMeta::new(b.pool_b_validator_stake, false),
+        AccountMeta::new(b.pool_b_reserve_stake, false),
+        AccountMeta::new(b.pool_b_manager_fee, false),
+        AccountMeta::new(b.pool_b_referral_fee, false),
+        AccountMeta::new(b.pool_b_mint, false),
+        AccountMeta::new_readonly(STAKE_PROGRAM_ID, false),
+        AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+        AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        AccountMeta::new_readonly(CLOCK_SYSVAR_ID, false),
+        AccountMeta::new_readonly(STAKE_HISTORY_SYSVAR_ID, false),
+        AccountMeta::new_readonly(accounts.interceptor_program, false),
+        AccountMeta::new(accounts.deposit_receipt, false),
+        AccountMeta::new_readonly(accounts.base, true),
+        AccountMeta::new(accounts.vault, false),
+        AccountMeta::new(accounts.fee_wallet, false),
+    ];
+    debug_assert_eq!(metas.len(), 32);
+
+    Instruction {
+        program_id: b.program_id,
+        accounts: metas,
+        data,
+    }
+}
+
 fn parse_pubkey(field: &str, s: &str) -> Result<Pubkey> {
     Pubkey::from_str(s).with_context(|| format!("invalid pubkey in `{field}`: {s}"))
 }
@@ -321,7 +452,8 @@ pub fn derive_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
 
 /// Inputs to the config-derivation flow. Anything optional falls back to a
 /// sensible default (canonical SPL stake-pool program, `referral_fee` =
-/// `manager_fee_account`).
+/// `manager_fee_account`). `vault`/`fee_wallet` are only required when pool
+/// B's `stake_deposit_authority` is owned by the interceptor program.
 #[derive(Debug, Clone)]
 pub struct DeriveInputs {
     pub slipstream_program_id: Pubkey,
@@ -331,10 +463,42 @@ pub struct DeriveInputs {
     pub user: Pubkey,
     pub pool_a_program: Option<Pubkey>,
     pub pool_b_program: Option<Pubkey>,
+    /// Interceptor vault token account. Required iff interceptor mode.
+    pub vault: Option<Pubkey>,
+    /// Interceptor fee wallet token account. Required iff interceptor mode.
+    pub fee_wallet: Option<Pubkey>,
+}
+
+/// Which deposit path a swap must take, based on who owns pool B's
+/// `stake_deposit_authority` account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RouteMode {
+    /// Pool B uses the default deposit-authority PDA derived by the
+    /// stake-pool program — vanilla `Swap`.
+    Vanilla,
+    /// Pool B's deposit authority is owned by the interceptor program —
+    /// must route via `SwapViaInterceptor`.
+    Interceptor,
+}
+
+/// Detect whether pool B requires the interceptor flow by checking the
+/// owner of its `stake_deposit_authority` account.
+pub fn detect_route_mode(rpc: &RpcClient, deposit_authority: &Pubkey) -> Result<RouteMode> {
+    let acct = rpc
+        .get_account(deposit_authority)
+        .with_context(|| format!("fetch deposit auth {deposit_authority}"))?;
+    Ok(if acct.owner == INTERCEPTOR_PROGRAM_ID {
+        RouteMode::Interceptor
+    } else {
+        RouteMode::Vanilla
+    })
 }
 
 /// Fetch both pool states from RPC and assemble a [`SwapConfig`]. The user's
 /// LST_A / LST_B token accounts are derived as ATAs of the pools' mints.
+///
+/// In interceptor mode, populates `config.interceptor` from `inputs.vault`
+/// and `inputs.fee_wallet`. Errors if those aren't supplied.
 pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<SwapConfig> {
     let pool_a_program = inputs.pool_a_program.unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
     let pool_b_program = inputs.pool_b_program.unwrap_or(SPL_STAKE_POOL_PROGRAM_ID);
@@ -374,6 +538,34 @@ pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<Swap
     let user_lst_a = derive_ata(&inputs.user, &pool_a_state.pool_mint);
     let user_lst_b = derive_ata(&inputs.user, &pool_b_state.pool_mint);
 
+    // Detect interceptor mode. We already fetched pool B; one extra read
+    // confirms ownership of the deposit-authority account.
+    let mode = detect_route_mode(rpc, &pool_b_state.stake_deposit_authority)?;
+    let interceptor = match mode {
+        RouteMode::Vanilla => None,
+        RouteMode::Interceptor => {
+            let vault = inputs.vault.ok_or_else(|| {
+                anyhow!(
+                    "pool B's deposit auth ({}) is owned by the interceptor program — \
+                     pass --vault <token account>",
+                    pool_b_state.stake_deposit_authority
+                )
+            })?;
+            let fee_wallet = inputs.fee_wallet.ok_or_else(|| {
+                anyhow!(
+                    "pool B's deposit auth ({}) is owned by the interceptor program — \
+                     pass --fee-wallet <token account>",
+                    pool_b_state.stake_deposit_authority
+                )
+            })?;
+            Some(InterceptorExtras {
+                program: INTERCEPTOR_PROGRAM_ID.to_string(),
+                vault: vault.to_string(),
+                fee_wallet: fee_wallet.to_string(),
+            })
+        }
+    };
+
     Ok(SwapConfig {
         program_id: inputs.slipstream_program_id.to_string(),
         user_lst_a: user_lst_a.to_string(),
@@ -401,5 +593,6 @@ pub fn derive_swap_config(rpc: &RpcClient, inputs: &DeriveInputs) -> Result<Swap
             referral_fee: pool_b_state.manager_fee_account.to_string(),
             mint: pool_b_state.pool_mint.to_string(),
         },
+        interceptor,
     })
 }

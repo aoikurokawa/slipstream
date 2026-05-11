@@ -1,7 +1,8 @@
 use pinocchio::{entrypoint, error::ProgramError, AccountView, Address, ProgramResult};
 
 use crate::instructions::{
-    initialize_config::process_initialize_config, swap::process_swap, SlipstreamInstruction,
+    initialize_config::process_initialize_config, swap::process_swap,
+    swap_via_interceptor::process_swap_via_interceptor, SlipstreamInstruction,
 };
 
 pub mod error;
@@ -24,13 +25,25 @@ const TAG_DEPOSIT_STAKE: u8 = 9;
 /// Stake program `Authorize` instruction tag (bincode `u32` LE).
 const STAKE_AUTHORIZE_TAG: u32 = 1;
 
+/// Jito's stake-deposit-interceptor program. Owns custom
+/// `stake_deposit_authority` accounts for pools that gate deposits
+/// (notably JitoSOL).
+const INTERCEPTOR_PROGRAM_ID: Address = Address::new_from_array(pinocchio_pubkey::from_str(
+    "5TAiuAh3YGDbwjEruC1ZpXTJWdNDS7Ur7VeqNNiHMmGV",
+));
+
+/// Interceptor `DepositStake` instruction tag (borsh u8 enum discriminant).
+const TAG_INTERCEPTOR_DEPOSIT_STAKE: u8 = 2;
+/// Interceptor `ClaimPoolTokens` instruction tag.
+const TAG_INTERCEPTOR_CLAIM_POOL_TOKENS: u8 = 5;
+
 /// Seed prefix for the per-swap transient stake PDA.
 const TRANSIENT_STAKE_SEED: &[u8] = b"transient";
 /// Seed for the program's global stake authority PDA.
 const ROUTER_AUTHORITY_SEED: &[u8] = b"router";
 
 #[repr(u32)]
-enum StakeAuthorize {
+pub(crate) enum StakeAuthorize {
     Staker = 0,
     Withdrawer = 1,
 }
@@ -62,6 +75,14 @@ fn process_instruction(
         } => {
             pinocchio_log::log!("Instruction: Swap");
             process_swap(program_id, accounts, amount_in, min_amount_out, nonce)
+        }
+        SlipstreamInstruction::SwapViaInterceptor {
+            amount_in,
+            min_amount_out,
+            nonce,
+        } => {
+            pinocchio_log::log!("Instruction: SwapViaInterceptor");
+            process_swap_via_interceptor(program_id, accounts, amount_in, min_amount_out, nonce)
         }
     }
 }
