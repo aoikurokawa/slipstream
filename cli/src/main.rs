@@ -3,13 +3,14 @@ use std::{fs, path::PathBuf, str::FromStr};
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use slipstream_cli::{
-    build_swap_ix, derive_router_authority, derive_swap_config, derive_transient_stake,
-    DeriveInputs, SwapAccounts,
+    build_swap_ix, build_swap_via_interceptor_ix, derive_router_authority, derive_swap_config,
+    derive_transient_stake, DeriveInputs, InterceptorSwapAccounts, SwapAccounts,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
+    signature::Keypair,
     signer::{keypair::read_keypair_file, Signer},
     transaction::Transaction,
 };
@@ -81,6 +82,11 @@ enum Command {
         #[arg(long, default_value = DEFAULT_KEYPAIR)]
         keypair: String,
 
+        /// Interceptor vault token account. Required when pool B's deposit
+        /// authority is owned by the interceptor program (e.g., JitoSOL).
+        #[arg(long)]
+        vault: Option<String>,
+
         /// Print the resolved accounts and instruction without submitting.
         #[arg(long)]
         dry_run: bool,
@@ -114,6 +120,8 @@ enum Command {
         pool_a_program: Option<String>,
         #[arg(long)]
         pool_b_program: Option<String>,
+        #[arg(long)]
+        vault: Option<String>,
         #[arg(long, default_value = DEFAULT_RPC_URL)]
         rpc_url: String,
         #[arg(long)]
@@ -136,6 +144,7 @@ fn main() -> Result<()> {
             pool_b_program,
             rpc_url,
             keypair,
+            vault,
             dry_run,
         } => run_swap(SwapArgs {
             pool_a,
@@ -149,6 +158,7 @@ fn main() -> Result<()> {
             pool_b_program,
             rpc_url,
             keypair,
+            vault,
             dry_run,
         }),
         Command::Derive {
@@ -164,6 +174,7 @@ fn main() -> Result<()> {
             user,
             pool_a_program,
             pool_b_program,
+            vault,
             rpc_url,
             out,
         } => run_derive_config(
@@ -174,6 +185,7 @@ fn main() -> Result<()> {
             user,
             pool_a_program,
             pool_b_program,
+            vault,
             rpc_url,
             out,
         ),
@@ -192,6 +204,7 @@ struct SwapArgs {
     pool_b_program: Option<String>,
     rpc_url: String,
     keypair: String,
+    vault: Option<String>,
     dry_run: bool,
 }
 
@@ -208,12 +221,38 @@ fn run_swap(args: SwapArgs) -> Result<()> {
         user: payer.pubkey(),
         pool_a_program: parse_opt_pubkey("--pool-a-program", args.pool_a_program)?,
         pool_b_program: parse_opt_pubkey("--pool-b-program", args.pool_b_program)?,
+        vault: parse_opt_pubkey("--vault", args.vault)?,
     };
 
     let rpc = RpcClient::new_with_commitment(args.rpc_url, CommitmentConfig::confirmed());
     let cfg = derive_swap_config(&rpc, &inputs)?;
     let accounts = SwapAccounts::from_config(&cfg, payer.pubkey(), args.nonce)?;
-    let ix = build_swap_ix(&accounts, args.amount_in, args.min_out, args.nonce);
+
+    // Interceptor mode requires an ephemeral `base` keypair as a second
+    // signer (seeds the DepositReceipt PDA).
+    let (ix, base_keypair) = if cfg.interceptor.is_some() {
+        let base = Keypair::new();
+        let interceptor_accounts =
+            InterceptorSwapAccounts::from_config(&cfg, payer.pubkey(), args.nonce, base.pubkey())?;
+        let ix = build_swap_via_interceptor_ix(
+            &interceptor_accounts,
+            args.amount_in,
+            args.min_out,
+            args.nonce,
+        );
+        println!("(interceptor mode — pool B requires the interceptor deposit flow)");
+        println!(
+            "deposit_receipt:   {}",
+            interceptor_accounts.deposit_receipt
+        );
+        println!("base:              {}", base.pubkey());
+        (ix, Some(base))
+    } else {
+        (
+            build_swap_ix(&accounts, args.amount_in, args.min_out, args.nonce),
+            None,
+        )
+    };
 
     print_resolution(&accounts, &cfg, args.amount_in, args.min_out, args.nonce);
 
@@ -225,7 +264,11 @@ fn run_swap(args: SwapArgs) -> Result<()> {
     let blockhash = rpc
         .get_latest_blockhash()
         .context("fetch latest blockhash")?;
-    let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash);
+    let tx = if let Some(base) = base_keypair.as_ref() {
+        Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer, base], blockhash)
+    } else {
+        Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)
+    };
     let sig = rpc
         .send_and_confirm_transaction(&tx)
         .context("send_and_confirm_transaction")?;
@@ -265,6 +308,7 @@ fn run_derive_config(
     user: String,
     pool_a_program: Option<String>,
     pool_b_program: Option<String>,
+    vault: Option<String>,
     rpc_url: String,
     out: Option<PathBuf>,
 ) -> Result<()> {
@@ -276,6 +320,7 @@ fn run_derive_config(
         user: Pubkey::from_str(&user).context("--user")?,
         pool_a_program: parse_opt_pubkey("--pool-a-program", pool_a_program)?,
         pool_b_program: parse_opt_pubkey("--pool-b-program", pool_b_program)?,
+        vault: parse_opt_pubkey("--vault", vault)?,
     };
 
     let rpc = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::confirmed());
