@@ -1,8 +1,9 @@
 use pinocchio::{error::ProgramError, Address};
+use shank::ShankAccount;
 
 use crate::error::SlipstreamError;
 
-#[derive(Debug)]
+#[derive(Debug, ShankAccount)]
 pub struct Config {
     /// Account with authority over this PDA.
     pub authority: Address,

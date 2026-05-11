@@ -1,9 +1,10 @@
 use pinocchio::error::ProgramError;
+use shank::ShankInstruction;
 
 pub mod initialize_config;
 pub mod swap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, ShankInstruction)]
 #[repr(C)]
 pub enum SlipstreamInstruction {
     /// Initialize config
