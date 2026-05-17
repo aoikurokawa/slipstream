@@ -4,7 +4,23 @@
   "instructions": [
     {
       "name": "InitializeConfig",
-      "accounts": [],
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "payer",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
       "args": [],
       "discriminant": {
         "type": "u8",
@@ -13,7 +29,148 @@
     },
     {
       "name": "Swap",
-      "accounts": [],
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "userLstA",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "userLstB",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "transientStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "routerAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolA",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAValidatorList",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAWithdrawAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAValidatorStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAManagerFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolB",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBValidatorList",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBDepositAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBDepositAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBWithdrawAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBValidatorStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBReserveStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBManagerFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBReferralFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "clock",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeHistory",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
       "args": [
         {
           "name": "amountIn",
@@ -35,7 +192,158 @@
     },
     {
       "name": "SwapViaInterceptor",
-      "accounts": [],
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "userLstA",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "transientStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "routerAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolA",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAValidatorList",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAWithdrawAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAValidatorStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAManagerFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolAMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolB",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBValidatorList",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBDepositAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBWithdrawAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBValidatorStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBReserveStake",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBManagerFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBReferralFee",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolBMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "clock",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeHistory",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "interceptorProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "depositReceipt",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "base",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "vault",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
       "args": [
         {
           "name": "amountIn",
